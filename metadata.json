@@ -1,6 +1,6 @@
 {
-  "name": "Remix Circle Triangle Playground",
-  "description": "Интерактивный учебный стенд: треугольник как система взаимосвязей на окружности",
+  "name": "Geometry Reasoning Stand",
+  "description": "Deterministic geometry learning and reasoning verification stand for humans and AI agents.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
