@@ -133,3 +133,11 @@ export type ActiveHighlight =
   | { type: 'center' }
   | { type: 'ratio'; kind: 'pi' | 'radian' }
   | null;
+
+export type {
+  MinorCentralAngle,
+  OrientedCentralAngle,
+  ReflexArc,
+  RadialDistance,
+} from './kernel/types';
+

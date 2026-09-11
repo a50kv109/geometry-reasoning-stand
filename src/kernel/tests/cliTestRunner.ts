@@ -33,7 +33,7 @@ results.forEach(r => {
 
 console.log('\n================================================================');
 if (allPassed) {
-  console.log('ALL 8 AUTONOMOUS KERNEL TESTS PASSED WITH 100% SUCCESS');
+  console.log(`ALL ${results.length} AUTONOMOUS KERNEL TESTS PASSED WITH 100% SUCCESS`);
 } else {
   console.error('SOME KERNEL TESTS FAILED');
   process.exit(1);
