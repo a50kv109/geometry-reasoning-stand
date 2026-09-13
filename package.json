@@ -14,7 +14,8 @@
     "test:audit": "tsx src/kernel/tests/auditChains.ts",
     "test:env": "tsx src/environment/tests/runEnvironmentContractTests.ts",
     "test:tool": "tsx src/tools/tests/testVerifyTransition.ts",
-    "test:all": "npm run test:kernel && npm run test:env && npm run test:tool"
+    "test:temporal": "tsx src/engines/tests/testTemporalObserver.ts",
+    "test:all": "npm run test:kernel && npm run test:env && npm run test:tool && npm run test:temporal"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

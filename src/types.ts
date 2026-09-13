@@ -80,6 +80,35 @@ export interface GeometrySource {
   readonly pointsU: { readonly A: number; readonly B: number; readonly C: number };
   readonly R: number;
   readonly scale: number;
+  readonly onBoundary?: { readonly [key in VertexId]?: boolean };
+}
+
+export type InvariantPreservationStatus =
+  | 'PRESERVED'
+  | 'BROKEN'
+  | 'DEGENERATE'
+  | 'NOT_APPLICABLE';
+
+export interface InvariantEvidence {
+  readonly passedPreconditions: readonly string[];
+  readonly failedPreconditions: readonly string[];
+  readonly reason: string;
+}
+
+export interface StructuralInvariantStatus {
+  readonly id: string;
+  readonly targetFact: string;
+  readonly basis: string;
+  readonly status: InvariantPreservationStatus;
+  readonly preservedValue: number | string | boolean | null;
+  readonly evidence: InvariantEvidence;
+}
+
+export interface StructuralInvariantDefinition {
+  readonly id: string;
+  readonly targetFact: string;
+  readonly preconditions: readonly string[];
+  readonly basis: string;
 }
 
 export interface GeometrySnapshot {
@@ -106,6 +135,7 @@ export interface GeometryTransition {
   readonly to: GeometrySnapshot;
   readonly changedVertex: VertexId | null;
   readonly deltas: GeometryDelta;
+  readonly invariantStatuses?: readonly StructuralInvariantStatus[];
 }
 
 export interface TraceStep {

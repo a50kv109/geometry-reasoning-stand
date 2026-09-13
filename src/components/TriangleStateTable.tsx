@@ -380,6 +380,29 @@ export const TriangleStateTable: React.FC<TriangleStateTableProps> = ({
             </div>
           </div>
 
+          {transition.invariantStatuses && transition.invariantStatuses.length > 0 && (
+            <div className="bg-white/90 p-2 rounded-lg border border-indigo-100 flex items-center justify-between text-xs">
+              <span className="text-[11px] font-medium text-slate-700">
+                Инвариант Фалеса (∠ACB = 90°):
+              </span>
+              <span
+                className={`font-mono font-bold text-[11px] px-2 py-0.5 rounded ${
+                  transition.invariantStatuses[0].status === 'PRESERVED'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : transition.invariantStatuses[0].status === 'DEGENERATE'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}
+              >
+                {transition.invariantStatuses[0].status === 'PRESERVED'
+                  ? 'СОХРАНЁН (PRESERVED)'
+                  : transition.invariantStatuses[0].status === 'DEGENERATE'
+                  ? 'ВЫРОЖДЕН (DEGENERATE)'
+                  : 'НАРУШЕН (BROKEN)'}
+              </span>
+            </div>
+          )}
+
           <p className="text-[11px] text-indigo-900/80 leading-relaxed font-normal">
             <strong>Закон связи в динамике:</strong> перемещение вершины на окружности непрерывно изменяет опирающуюся на неё дугу и угол в строгой пропорции: <code className="text-indigo-950 font-bold bg-white/70 px-1 py-0.5 rounded">Δ∠ = ½ · ΔДуга</code>.
           </p>

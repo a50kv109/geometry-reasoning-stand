@@ -5,8 +5,253 @@ import {
   GeometryDelta,
   GeometryTrace,
   VertexId,
+  StructuralInvariantDefinition,
+  StructuralInvariantStatus,
+  InvariantEvidence,
 } from '../types';
 import { computeGeometryBase } from './geometryState';
+
+/**
+ * Canonical dynamic structural invariants
+ */
+export const DYNAMIC_THALES_INVARIANT: StructuralInvariantDefinition = {
+  id: 'INV-DYN-THALES',
+  targetFact: 'angle_C',
+  preconditions: ['DIAMETER_AB', 'C_ON_CIRCLE_BOUNDARY', 'NON_DEGENERATE_VERTICES'],
+  basis: 'PKG-04: RULE-THALES-02-REV / PKG-DYN-THALES-INVARIANT',
+};
+
+export const INV_THALES_DIAM_AB: StructuralInvariantDefinition = {
+  id: 'INV-THALES-DIAM-AB',
+  targetFact: 'is_diameter_AB',
+  preconditions: ['DIAMETER_AB'],
+  basis: 'PKG-01 / PKG-02: Chord AB is Diameter',
+};
+
+export const INV_THALES_C_BOUNDARY: StructuralInvariantDefinition = {
+  id: 'INV-THALES-C-BOUNDARY',
+  targetFact: 'c_on_boundary',
+  preconditions: ['C_ON_CIRCLE_BOUNDARY'],
+  basis: 'PKG-01: Vertex C lies on CircleBoundary',
+};
+
+export const INV_PYTHAGOREAN_RELATION: StructuralInvariantDefinition = {
+  id: 'INV-PYTHAGOREAN-RELATION',
+  targetFact: 'pythagorean_identity_holds',
+  preconditions: ['DIAMETER_AB', 'C_ON_CIRCLE_BOUNDARY', 'NON_DEGENERATE_VERTICES'],
+  basis: 'PKG-03: AC^2 + BC^2 = AB^2 in right triangle',
+};
+
+export const INV_ACUTE_ANGLES_COMPLEMENT: StructuralInvariantDefinition = {
+  id: 'INV-ACUTE-ANGLES-COMPLEMENT',
+  targetFact: 'acute_angles_sum_90',
+  preconditions: ['DIAMETER_AB', 'C_ON_CIRCLE_BOUNDARY', 'NON_DEGENERATE_VERTICES'],
+  basis: 'PKG-03: angle_A + angle_B = 90° when angle_C = 90°',
+};
+
+export const CANONICAL_INVARIANT_SUITE: readonly StructuralInvariantDefinition[] = [
+  INV_THALES_DIAM_AB,
+  INV_THALES_C_BOUNDARY,
+  DYNAMIC_THALES_INVARIANT,
+  INV_PYTHAGOREAN_RELATION,
+  INV_ACUTE_ANGLES_COMPLEMENT,
+] as const;
+
+/**
+ * Computes shortest distance between two points on a normalized [0, 1) circle.
+ */
+export function cyclicDistance(u1: number, u2: number): number {
+  const norm1 = ((u1 % 1) + 1) % 1;
+  const norm2 = ((u2 % 1) + 1) % 1;
+  const diff = Math.abs(norm1 - norm2);
+  return Math.min(diff, 1 - diff);
+}
+
+/**
+ * Evaluates structural preconditions for a dynamic invariant on a GeometrySnapshot.
+ * Structural premises valid -> invariant preserved.
+ * Fluctuation / numeric equality alone is NEVER proof.
+ */
+export function evaluateStructuralInvariant(
+  invariant: StructuralInvariantDefinition,
+  snapshot: GeometrySnapshot
+): StructuralInvariantStatus {
+  const passedPreconditions: string[] = [];
+  const failedPreconditions: string[] = [];
+
+  const uA = snapshot.source.pointsU.A;
+  const uB = snapshot.source.pointsU.B;
+  const uC = snapshot.source.pointsU.C;
+
+  // Check each required precondition
+  for (const pre of invariant.preconditions) {
+    if (pre === 'DIAMETER_AB') {
+      const isDiameter =
+        Math.abs(snapshot.arcs.AB - 0.5) < 0.008 ||
+        Math.abs(cyclicDistance(uA, uB) - 0.5) < 0.008;
+      if (isDiameter) {
+        passedPreconditions.push(pre);
+      } else {
+        failedPreconditions.push(pre);
+      }
+    } else if (pre === 'C_ON_CIRCLE_BOUNDARY') {
+      const onBoundary = snapshot.source.onBoundary?.C !== false;
+      if (onBoundary) {
+        passedPreconditions.push(pre);
+      } else {
+        failedPreconditions.push(pre);
+      }
+    } else if (pre === 'NON_DEGENERATE_VERTICES') {
+      const distCA = cyclicDistance(uC, uA);
+      const distCB = cyclicDistance(uC, uB);
+      const distAB = cyclicDistance(uA, uB);
+      const eps = 1e-4;
+      const isNonDegenerate = distCA >= eps && distCB >= eps && distAB >= eps;
+      if (isNonDegenerate) {
+        passedPreconditions.push(pre);
+      } else {
+        failedPreconditions.push(pre);
+      }
+    } else {
+      // Unknown precondition fails safely
+      failedPreconditions.push(pre);
+    }
+  }
+
+  // Degeneracy guard takes precedence
+  if (failedPreconditions.includes('NON_DEGENERATE_VERTICES')) {
+    return {
+      id: invariant.id,
+      targetFact: invariant.targetFact,
+      basis: invariant.basis,
+      status: 'DEGENERATE',
+      preservedValue: null,
+      evidence: {
+        passedPreconditions,
+        failedPreconditions,
+        reason:
+          'Degenerate configuration: vertices coincide (cyclic distance < 1e-4). Cannot preserve angle fact.',
+      },
+    };
+  }
+
+  // If any other precondition failed, invariant is broken
+  if (failedPreconditions.length > 0) {
+    return {
+      id: invariant.id,
+      targetFact: invariant.targetFact,
+      basis: invariant.basis,
+      status: 'BROKEN',
+      preservedValue: null,
+      evidence: {
+        passedPreconditions,
+        failedPreconditions,
+        reason: `Structural precondition broken: failed [${failedPreconditions.join(', ')}].`,
+      },
+    };
+  }
+
+  // All preconditions valid -> PRESERVED
+  let preservedValue: number | string | boolean | null = null;
+  if (invariant.targetFact === 'angle_C' || invariant.targetFact === 'acute_angles_sum_90') {
+    preservedValue = 90;
+  } else if (
+    invariant.targetFact === 'is_diameter_AB' ||
+    invariant.targetFact === 'c_on_boundary' ||
+    invariant.targetFact === 'pythagorean_identity_holds'
+  ) {
+    preservedValue = true;
+  }
+
+  return {
+    id: invariant.id,
+    targetFact: invariant.targetFact,
+    basis: invariant.basis,
+    status: 'PRESERVED',
+    preservedValue,
+    evidence: {
+      passedPreconditions,
+      failedPreconditions: [],
+      reason: `All structural premises verified: [${passedPreconditions.join(', ')}]. Invariant remains applicable.`,
+    },
+  };
+}
+
+/**
+ * Evaluates an array of invariants against a snapshot.
+ */
+export function evaluateStructuralInvariants(
+  snapshot: GeometrySnapshot,
+  invariants: readonly StructuralInvariantDefinition[] = [DYNAMIC_THALES_INVARIANT]
+): StructuralInvariantStatus[] {
+  return invariants.map((inv) => evaluateStructuralInvariant(inv, snapshot));
+}
+
+/**
+ * Native temporal session managing bounded history of snapshots and transitions.
+ * Does NOT mutate Knowledge Graph or Navigator.
+ */
+export class NativeGeometryTemporalSession {
+  private snapshots: GeometrySnapshot[] = [];
+  private transitions: GeometryTransition[] = [];
+  private readonly maxCapacity: number;
+  private activeInvariants: readonly StructuralInvariantDefinition[];
+
+  constructor(
+    maxCapacity: number = 1000,
+    invariants: readonly StructuralInvariantDefinition[] = [DYNAMIC_THALES_INVARIANT]
+  ) {
+    this.maxCapacity = Math.max(10, maxCapacity);
+    this.activeInvariants = invariants;
+  }
+
+  public record(snapshot: GeometrySnapshot): GeometryTransition | null {
+    const prev = this.snapshots.length > 0 ? this.snapshots[this.snapshots.length - 1] : null;
+    this.snapshots.push(snapshot);
+    if (this.snapshots.length > this.maxCapacity) {
+      this.snapshots.shift();
+    }
+
+    if (!prev) {
+      return null;
+    }
+
+    const transition = computeTransition(prev, snapshot);
+    if (transition) {
+      this.transitions.push(transition);
+      if (this.transitions.length > this.maxCapacity) {
+        this.transitions.shift();
+      }
+    }
+    return transition;
+  }
+
+  public getHistory(): readonly GeometrySnapshot[] {
+    return this.snapshots;
+  }
+
+  public getTransitions(): readonly GeometryTransition[] {
+    return this.transitions;
+  }
+
+  public getLatestSnapshot(): GeometrySnapshot | null {
+    return this.snapshots.length > 0 ? this.snapshots[this.snapshots.length - 1] : null;
+  }
+
+  public checkInvariants(snapshot?: GeometrySnapshot): StructuralInvariantStatus[] {
+    const target = snapshot ?? this.getLatestSnapshot();
+    if (!target) return [];
+    return evaluateStructuralInvariants(target, this.activeInvariants);
+  }
+
+  public reset(initialSnapshot?: GeometrySnapshot): void {
+    this.snapshots = [];
+    this.transitions = [];
+    if (initialSnapshot) {
+      this.record(initialSnapshot);
+    }
+  }
+}
 
 /**
  * Creates an immutable GeometrySnapshot strictly from source parameters,
@@ -50,6 +295,7 @@ export function createGeometrySnapshot(
       pointsU: { ...source.pointsU },
       R: source.R,
       scale: source.scale,
+      onBoundary: source.onBoundary ? { ...source.onBoundary } : undefined,
     },
     arcs: { AB: arcAB, BC: arcBC, CA: arcCA },
     angles: { A: angleA, B: angleB, C: angleC },
@@ -103,11 +349,14 @@ export function computeTransition(
     deltaPerimeter: (curr.perimeter - prev.perimeter) * curr.source.scale,
   };
 
+  const invariantStatuses = evaluateStructuralInvariants(curr, [DYNAMIC_THALES_INVARIANT]);
+
   return {
     from: prev,
     to: curr,
     changedVertex,
     deltas,
+    invariantStatuses,
   };
 }
 
